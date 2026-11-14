@@ -1,4 +1,4 @@
-const CACHE = 'hour-lab-1.0.0';
+const CACHE = 'hour-lab-1.1.0';
 const files = ['./', './index.html', './style.css', './core.js', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(files))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys =>

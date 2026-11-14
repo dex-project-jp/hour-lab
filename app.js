@@ -61,6 +61,7 @@ function showDetail(journal, preserve = false) {
 function reserveDraft() {
   if (data.draft) {
     navigate('work');
+    if (data.draft.running) throw Error('作業中の記録があります。先に作業を終了して保存してください。');
     throw Error('入力途中の作業があります。保存または入力破棄してから開始してください。');
   }
 }
@@ -95,37 +96,46 @@ function workView() {
   if (!d) return '<h1>作業入力</h1><section class="card"><h2>新しい作業を記録</h2>' +
     btn('new', '＋ 新規作成', '', 'primary wide') + '</section>';
   const match = H.findJournal(data.journals, d);
-  const editable = !d.partId;
+  const working = d.running && !d.finished;
+  const editable = !d.partId && !d.running;
   const machines = [...data.machines];
   if (d.machineId && !machines.some(m => m.id === d.machineId)) {
     const past = live().find(j => j.machineId === d.machineId);
     if (past) machines.unshift({id: past.machineId, name: past.machine});
   }
   const sites = [...new Set([...data.sites, ...live().map(j => j.site)])];
-  return `<h1>${d.partId ? '作業を編集' : '作業入力'}</h1>
-  <section class="card">
+  const machineName = machines.find(m => m.id === d.machineId)?.name;
+  const heading = d.partId ? '作業を編集' : working ? '作業中' : d.running ? '作業終了' : '作業入力';
+  return `<h1>${heading}</h1>
+  ${working ? btn('finish','作業終了','','primary wide work-end') : ''}
+  ${d.running ? `<section class="card">
+    <h2>${dayLabel(d.day)}</h2><p class="break">${esc(d.machineName || machineName || d.machineId)} · ${esc(d.site)}</p>
+    <p>鶴居　${d.tsurui ? 'あり' : 'なし'}</p>
+  </section>` : `<section class="card">
   ${field('draft','day','作業日',d.day,`type="date" ${editable ? '' : 'disabled'}`)}
   <label>作業機械<select data-target="draft" name="machineId" ${editable ? '' : 'disabled'}>
   <option value="">選択してください</option>${machines.map(m => `<option value="${esc(m.id)}" ${m.id === d.machineId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
   ${field('draft','site','作業先',d.site,`list="sites" maxlength="100" autocomplete="off" ${editable ? '' : 'disabled'}`)}
   <datalist id="sites">${sites.map(site => `<option value="${esc(site)}"></option>`).join('')}</datalist>
   <label class="check"><input type="checkbox" data-target="draft" name="tsurui" ${(match?.tsurui ?? d.tsurui) ? 'checked' : ''} ${match ? 'disabled' : ''}>鶴居加算</label>
-  <p id="match" class="muted">${match && !d.partId ? '同じ日・機械・作業先の日誌に追加します。' : ''}</p></section>
+  <p id="match" class="muted">${match && !d.partId ? '同じ日・機械・作業先の日誌に追加します。' : ''}</p></section>`}
   <section class="card"><h2>開始</h2>${timeInput(d,'start','開始時刻')}
   ${field('draft','first','開始アワメーター',d.first,'inputmode="decimal" placeholder="4756.6"')}</section>
   ${d.finished ? `<section class="card"><h2>終了</h2>${timeInput(d,'end','終了時刻')}
   ${field('draft','last','終了アワメーター',d.last,'inputmode="decimal" placeholder="4758.6"')}
   <p id="preview" class="muted"></p></section>` : ''}
-  ${btn(d.finished ? 'save' : 'finish', d.finished ? '保存' : '終了', '', 'primary wide')}
+  ${working ? '' : btn(d.finished ? 'save' : 'begin', d.finished ? '保存' : '開始', '', 'primary wide')}
   ${btn('discard','入力を破棄','','danger spaced')}`;
 }
 function refreshDraftHints() {
   const d = data.draft;
   const match = H.findJournal(data.journals, d);
   const checkbox = main.querySelector('[name=tsurui]');
-  checkbox.disabled = Boolean(match);
-  checkbox.checked = match?.tsurui ?? d.tsurui;
-  main.querySelector('#match').textContent = match && !d.partId ? '同じ日・機械・作業先の日誌に追加します。' : '';
+  if (checkbox) {
+    checkbox.disabled = Boolean(match);
+    checkbox.checked = match?.tsurui ?? d.tsurui;
+    main.querySelector('#match').textContent = match && !d.partId ? '同じ日・機械・作業先の日誌に追加します。' : '';
+  }
   const preview = main.querySelector('#preview');
   if (!preview) return;
   const duration = H.minutes(d.end) - H.minutes(d.start);
@@ -365,14 +375,31 @@ document.addEventListener('click', async event => {
   if (!button) return;
   const {action,id,key,time,delta} = button.dataset;
   try {
+    if (action === 'recent' && data.draft?.running) reserveDraft();
     if (['work','list','settings','recent'].includes(action)) navigate(action);
     if (action === 'new') startDraft();
     if (action === 'open') showDetail(current(id), screen === 'list' || screen === 'detail');
     if (action === 'resume') startDraft(current(id));
-    if (action === 'finish') {
+    if (action === 'begin' || action === 'finish') {
       const d = data.draft, now = H.clock();
+      if (!d || d.finished || (action === 'begin') === Boolean(d.running)) return;
       if (!d.day || !d.machineId || !d.site.trim() || !Number.isFinite(H.meter(d.first.trim())) ||
           !Number.isFinite(H.minutes(d.start))) throw Error('作業日・機械・作業先・開始時刻・開始アワーを確認してください。');
+      if (action === 'begin') {
+        const existing = H.findJournal(data.journals,d);
+        if (existing && H.minutes(d.start) < H.minutes(existing.parts[existing.parts.length-1].end)) {
+          throw Error('前の作業の終了以降の開始時刻を入力してください。');
+        }
+        const machine = data.machines.find(m=>m.id===d.machineId);
+        change(next => {
+          Object.assign(next.draft, {running:true, site:d.site.trim(), tsurui:existing?.tsurui ?? d.tsurui,
+            machineName:machine?.name ?? existing?.machine ?? live().find(j=>j.machineId===d.machineId)?.machine,
+            end:'', endCapture:'', last:''});
+        });
+        navigate('work');
+        notice('開始を端末に保存しました。');
+        return;
+      }
       change(next => { Object.assign(next.draft, {finished:true,end:d.day === now.day ? now.time : '',endCapture:d.day === now.day ? now.time : ''}); });
       render();
       main.querySelector('[name=end]').closest('section').scrollIntoView({block:'start'});
@@ -385,7 +412,7 @@ document.addEventListener('click', async event => {
       main.querySelector(`[name="${key}"]`).value = value;
       refreshDraftHints();
     }
-    if (action === 'save') saveDraft();
+    if (action === 'save' && data.draft?.finished) saveDraft();
     if (action === 'discard' && confirm('入力途中の作業を破棄しますか？')) {
       change(next=>{ next.draft = null; });
       navigate('work');
@@ -393,6 +420,9 @@ document.addEventListener('click', async event => {
     if (action === 'edit-part') editPart(id);
     if (action === 'remove-part') removeJournal(detailId,id);
     if (action === 'remove-journal') removeJournal(id);
+    if (action === 'remove-machine' && data.draft?.running && data.draft.machineId === id) {
+      throw Error('作業中の機械です。作業を保存してから削除してください。');
+    }
     if (action === 'remove-machine' && confirm('機械を選択候補から削除しますか？')) {
       change(next=>{ next.machines = next.machines.filter(m=>m.id!==id); });
       render();

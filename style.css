@@ -1,2 +1,20 @@
 :root{color-scheme:dark;--bg:#14130f;--panel:#201e18;--line:#454032;--gold:#eac77c;--ink:#f6f1e6;--muted:#c7bfad;--danger:#ffac9f;font-family:"Hiragino Sans",system-ui,sans-serif;font-size:16px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);padding-bottom:calc(90px + env(safe-area-inset-bottom));font-variant-numeric:tabular-nums}.wrap{width:min(100% - 32px,620px);margin-inline:auto}.top{border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}.brand{display:flex;align-items:center;gap:10px;min-height:70px;color:var(--gold);font-weight:850;letter-spacing:.13em}.brand img{border-radius:10px}.brand button{margin-left:auto}.top button{font-size:.9rem}main{padding-top:22px}h1{font-size:1.65rem;margin:0 0 16px}h2{font-size:1.15rem;margin:0 0 12px}p{line-height:1.55;margin:8px 0}small,.muted{color:var(--muted)}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:0 0 12px}.card>label{margin-top:10px}label{display:block;font-weight:650}input,select,button{font:inherit;min-height:44px;border:1px solid var(--line);border-radius:10px;color:var(--ink);background:#171610;padding:8px 11px;max-width:100%}input,select{display:block;width:100%;min-width:0;margin:5px 0 8px;font-size:16px}button{cursor:pointer;font-weight:700;touch-action:manipulation}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}.primary{background:var(--gold);color:#211809;border-color:var(--gold)}.wide{width:100%}.danger{color:var(--danger)}.row,.between,.time-grid,.grid{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.time-grid button{flex:1 1 68px;font-size:.88rem}.time-grid small{display:block}.check{display:flex;align-items:center;gap:10px;min-height:44px}.check input{width:22px;min-height:22px;margin:0;accent-color:var(--gold)}.journal{text-align:left;width:100%;display:block;padding:13px;margin:8px 0}.journal strong{display:block;margin:4px 0;overflow-wrap:anywhere}.number{color:var(--gold);font-size:1.38rem;font-weight:850}.segment{display:grid;grid-template-columns:1.8rem minmax(0,1fr) auto;gap:5px;align-items:center;border-top:1px solid var(--line);padding:8px 0}.total{border-top:1px solid var(--line);margin-top:6px;padding-top:10px}.money{padding:5px 0}.nav{display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:5px;padding-block:8px}nav{position:fixed;bottom:0;left:0;right:0;z-index:2;background:#191710;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}.nav button{padding-inline:3px}.nav [aria-current=page]{color:var(--gold);border-color:var(--gold)}#message:not(:empty){position:fixed;z-index:3;bottom:calc(66px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#302617;color:var(--ink);border:1px solid var(--gold);padding:10px 12px;border-radius:10px}.compact{font-size:.88rem;padding-inline:8px}.spaced{margin-top:12px}summary{cursor:pointer;min-height:36px;padding-top:6px;color:var(--gold)}.break{overflow-wrap:anywhere}@media(max-width:360px){.wrap{width:calc(100% - 20px)}.card{padding:11px}.brand{letter-spacing:.08em}}
+
+/* Keep Safari's native date and time controls within the form's content box. */
+.card label,.card form{min-width:0}
+input[type=date],input[type=time]{
+  -webkit-appearance:none;
+  appearance:none;
+  inline-size:100%;
+  min-inline-size:0;
+  max-inline-size:100%;
+  box-sizing:border-box;
+  text-align:left;
+}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{
+  min-inline-size:0;
+  text-align:left;
+}
+@media(max-width:360px){.grid3{gap:5px}.grid3 select{padding-inline:5px}}
+.work-end{min-height:52px;margin-bottom:12px}
