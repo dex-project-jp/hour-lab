@@ -87,9 +87,7 @@ function timeInput(draft, key, label) {
   const choice = (label, time) => btn('time', `${label}<small>${esc(time || '翌日')}</small>`,
     `data-key="${key}" data-time="${esc(time)}" ${time ? '' : 'disabled'}`);
   return field('draft', key, label, value, 'type="time"') +
-    '<div class="time-grid">' + (captured ? options.map(item => choice(...item)).join('') : '') + '</div>' +
-    '<div class="row spaced">' + [-15, 15].map(n => btn('shift', n < 0 ? '−15分' : '＋15分',
-      `data-key="${key}" data-delta="${n}"`, 'compact')).join('') + '</div>';
+    (captured ? '<div class="time-grid">' + options.map(item => choice(...item)).join('') + '</div>' : '');
 }
 function workView() {
   const d = data.draft;
@@ -179,9 +177,11 @@ function detailView() {
   const journals = visible();
   const index = journals.findIndex(j => j.id === journal.id);
   const prev = journals[index-1], next = journals[index+1];
+  const pagination = `<div class="between card" role="group" aria-label="日誌の前後移動">
+    ${btn('open','← 前へ',prev ? idAttr(prev.id) : 'disabled')}<small>${index+1} / ${journals.length}</small>
+    ${btn('open','次へ →',next ? idAttr(next.id) : 'disabled')}</div>`;
   return `<div class="between"><h1>作業日誌</h1>${btn('list','一覧に戻る','','compact')}</div>
-    <div class="between card">${btn('open','← 前へ',prev ? idAttr(prev.id) : 'disabled')}<small>${index+1} / ${journals.length}</small>
-    ${btn('open','次へ →',next ? idAttr(next.id) : 'disabled')}</div>
+    ${pagination}
     <section class="card"><h2>${dayLabel(journal.day)}</h2><p class="break">作業機械　${esc(journal.machine)}</p><p class="break">作業先　${esc(journal.site)}</p>
     <p>鶴居　${journal.tsurui ? 'あり' : 'なし'}</p></section>
     ${group('作業時間',journal.parts.map((p,i)=>row(i,esc(p.start)+'〜'+esc(p.end),h(t.parts[i].mins,60))),h(t.mins,60))}
@@ -203,7 +203,8 @@ function detailView() {
     <button>日誌情報を保存</button></form>
     ${journal.parts.map((p,i)=>`<div class="between total"><span>${mark(i)} ${esc(p.start)}〜${esc(p.end)}</span>
     <div class="row">${btn('edit-part','編集',idAttr(p.id),'compact')}${btn('remove-part','削除',idAttr(p.id),'danger compact')}</div></div>`).join('')}
-    ${btn('remove-journal','日誌を削除',idAttr(journal.id),'danger spaced')}</details>`;
+    ${btn('remove-journal','日誌を削除',idAttr(journal.id),'danger spaced')}</details>
+    ${pagination}`;
 }
 function settingsView() {
   const rates = 'type="number" min="0" max="1000000" step="1"';
@@ -373,7 +374,7 @@ function conflictCards() {
 document.addEventListener('click', async event => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
-  const {action,id,key,time,delta} = button.dataset;
+  const {action,id,key,time} = button.dataset;
   try {
     if (action === 'recent' && data.draft?.running) reserveDraft();
     if (['work','list','settings','recent'].includes(action)) navigate(action);
@@ -405,11 +406,9 @@ document.addEventListener('click', async event => {
       main.querySelector('[name=end]').closest('section').scrollIntoView({block:'start'});
       if (d.day !== now.day) notice('作業日と取得日の違いを確認し、作業日当日の終了時刻を入力してください。');
     }
-    if (action === 'time' || action === 'shift') {
-      const value = action === 'time' ? time : H.timeAt(H.minutes(data.draft[key]) + Number(delta));
-      if (!value) throw Error('日付をまたぐ時刻には変更できません。');
-      change(next => { next.draft[key] = value; });
-      main.querySelector(`[name="${key}"]`).value = value;
+    if (action === 'time' && time) {
+      change(next => { next.draft[key] = time; });
+      main.querySelector(`[name="${key}"]`).value = time;
       refreshDraftHints();
     }
     if (action === 'save' && data.draft?.finished) saveDraft();
