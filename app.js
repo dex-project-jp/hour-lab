@@ -24,7 +24,7 @@ try {
   main.textContent = '記録を読み込めませんでした。ブラウザに保存されているデータを確認してください。';
   throw Error('HOUR LAB local storage unavailable');
 }
-let screen = 'work', detailId = '', year = H.clock().day.slice(0, 4), month = '', newest = false;
+let screen = 'work', detailId = '', year = H.clock().day.slice(0, 4), month = '', newest = true;
 let busy = false, syncStatus = '', toastTimer;
 function notice(text) {
   message.textContent = text;
@@ -65,14 +65,14 @@ function reserveDraft() {
     throw Error('入力途中の作業があります。保存または入力破棄してから開始してください。');
   }
 }
-function startDraft(source) {
+function startDraft(source, originalDay = false) {
   reserveDraft();
   const now = H.clock();
-  const identity = {day: now.day, machineId: source?.machineId ?? data.machines[0]?.id ?? '',
+  const identity = {day: originalDay ? source.day : now.day, machineId: source?.machineId ?? data.machines[0]?.id ?? '',
     site: source?.site ?? ''};
   const target = source && H.findJournal(data.journals, identity);
   const previous = (target || source)?.parts.slice(-1)[0];
-  const draft = {...identity, tsurui: (target || source)?.tsurui ?? false,
+  const draft = {...identity, originalDay, tsurui: (target || source)?.tsurui ?? false,
     start: now.time, startCapture: now.time, first: previous?.last ?? '',
     end: '', endCapture: '', last: '', finished: false, editId: '', partId: ''};
   change(next => { next.draft = draft; });
@@ -91,11 +91,22 @@ function timeInput(draft, key, label) {
 }
 function workView() {
   const d = data.draft;
-  if (!d) return '<h1>作業入力</h1><section class="card"><h2>新しい作業を記録</h2>' +
-    btn('new', '＋ 新規作成', '', 'primary wide') + '</section>';
+  if (!d) {
+    const last = current(data.lastWorkId) || (data.workOrder || []).slice().reverse().map(current).find(Boolean) || live().slice(-1)[0];
+    const today = H.clock().day;
+    return `<div class="between"><h1>作業入力</h1>${btn('refresh','更新')}</div>
+      <section class="card">${btn('new','＋ 新規作成','','primary wide')}</section>
+      ${last ? `<section class="card"><h2>最後の作業</h2>
+        <p>${dayLabel(last.day)}</p><p class="break">${esc(last.machine)} · ${esc(last.site)}</p>
+        <p>終了アワー　${(H.meter(last.parts.at(-1).last)/10).toFixed(1)}</p>
+        <div class="row">${btn('resume','この作業の続きから',idAttr(last.id),'primary')}
+        ${last.day !== today ? btn('resume-today','今日の作業として引き継ぐ',idAttr(last.id)) : ''}</div>
+        ${last.day !== today ? '<p class="muted">「この作業の続きから」は表示の日付の日誌に追加します。</p>' : ''}
+      </section>` : ''}`;
+  }
   const match = H.findJournal(data.journals, d);
   const working = d.running && !d.finished;
-  const editable = !d.partId && !d.running;
+  const editable = !d.partId && !d.running && !d.originalDay;
   const machines = [...data.machines];
   if (d.machineId && !machines.some(m => m.id === d.machineId)) {
     const past = live().find(j => j.machineId === d.machineId);
@@ -104,7 +115,7 @@ function workView() {
   const sites = [...new Set([...data.sites, ...live().map(j => j.site)])];
   const machineName = machines.find(m => m.id === d.machineId)?.name;
   const heading = d.partId ? '作業を編集' : working ? '作業中' : d.running ? '作業終了' : '作業入力';
-  return `<h1>${heading}</h1>
+  return `<div class="between"><h1>${heading}</h1>${btn('refresh','更新')}</div>
   ${working ? btn('finish','作業終了','','primary wide work-end') : ''}
   ${d.running ? `<section class="card">
     <h2>${dayLabel(d.day)}</h2><p class="break">${esc(d.machineName || machineName || d.machineId)} · ${esc(d.site)}</p>
@@ -145,7 +156,7 @@ function refreshDraftHints() {
 }
 function journalButton(j) {
   const t = H.totals(j);
-  return btn(screen === 'recent' ? 'resume' : 'open',
+  return btn(screen === 'recent' ? 'resume-today' : 'open',
     `<small>${dayLabel(j.day)}</small><strong>${esc(j.machine)} · ${esc(j.site)}</strong><span class="number">${h(t.mins,60)}h</span>`,
     idAttr(j.id), 'journal');
 }
@@ -158,7 +169,7 @@ function listView() {
   const years = [...new Set([year, H.clock().day.slice(0,4), ...live().map(j => j.day.slice(0,4))])].sort().reverse();
   const options = (values, selected, label) => values.map(v =>
     `<option value="${v}" ${v === selected ? 'selected' : ''}>${label(v)}</option>`).join('');
-  return `<h1>作業日誌一覧</h1><section class="card grid grid3">
+  return `<div class="between"><h1>作業日誌一覧</h1>${btn('refresh','更新')}</div><section class="card grid grid3">
   <label>年<select data-filter="year">${options(years,year,v => v+'年')}</select></label>
   <label>月<select data-filter="month">${options(['', ...Array.from({length:12},(_,i)=>String(i+1).padStart(2,'0'))],month,v=>v ? Number(v)+'月':'全月')}</select></label>
   <label>順番<select data-filter="order">${options(['old','new'],newest?'new':'old',v=>v==='old'?'古い順':'新しい順')}</select></label>
@@ -278,6 +289,10 @@ function saveDraft() {
   change(next => {
     next.journals = [...next.journals.filter(item=>item.id!==j.id),j];
     next.draft = null;
+    if (!d.partId) {
+      next.lastWorkId = j.id;
+      next.workOrder = [...(next.workOrder || []).filter(id=>id!==j.id),j.id];
+    }
     if (!next.sites.some(site=>site===j.site)) next.sites.push(j.site);
   });
   showDetail(j);
@@ -380,7 +395,16 @@ document.addEventListener('click', async event => {
     if (['work','list','settings','recent'].includes(action)) navigate(action);
     if (action === 'new') startDraft();
     if (action === 'open') showDetail(current(id), screen === 'list' || screen === 'detail');
-    if (action === 'resume') startDraft(current(id));
+    if (action === 'resume' || action === 'resume-today') {
+      const source = current(id);
+      if (source) startDraft(source, action === 'resume');
+    }
+    if (action === 'refresh') {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) data = JSON.parse(stored);
+      render();
+      notice('端末の保存データを読み込みました。');
+    }
     if (action === 'begin' || action === 'finish') {
       const d = data.draft, now = H.clock();
       if (!d || d.finished || (action === 'begin') === Boolean(d.running)) return;

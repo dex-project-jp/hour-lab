@@ -15,8 +15,8 @@
   const findJournal = (journals, identity) => journals.find(j => !j.deleted && journalKey(j) === journalKey(identity));
   const listed = (journals, year, month, newest) => journals
     .filter(j => !j.deleted && j.day.startsWith(year + '-' + month))
-    .sort((a, b) => (newest ? -1 : 1) * (a.day.localeCompare(b.day) ||
-      a.created - b.created || a.id.localeCompare(b.id)));
+    .sort((a, b) => (newest ? -1 : 1) * a.day.localeCompare(b.day) ||
+      a.created - b.created || a.id.localeCompare(b.id));
   function validateSegment(segment) {
     const start = minutes(segment.start), end = minutes(segment.end);
     const first = meter(segment.first), last = meter(segment.last);
