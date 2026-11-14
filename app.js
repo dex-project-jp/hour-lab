@@ -78,16 +78,21 @@ function startDraft(source, originalDay = false) {
   change(next => { next.draft = draft; });
   navigate('work');
 }
-function timeInput(draft, key, label) {
-  const captured = draft[key + 'Capture'];
-  const minute = H.minutes(captured);
-  const value = draft[key];
+function timeChoices(key, value) {
+  const minute = H.minutes(value);
   const options = [['切り下げ', H.timeAt(Math.floor(minute / 15) * 15)],
-    ['取得時刻', captured], ['切り上げ', H.timeAt(Math.ceil(minute / 15) * 15)]];
-  const choice = (label, time) => btn('time', `${label}<small>${esc(time || '翌日')}</small>`,
-    `data-key="${key}" data-time="${esc(time)}" ${time ? '' : 'disabled'}`);
-  return field('draft', key, label, value, 'type="time"') +
-    (captured ? '<div class="time-grid">' + options.map(item => choice(...item)).join('') + '</div>' : '');
+    ['切り上げ', H.timeAt(Math.ceil(minute / 15) * 15)]];
+  return options.map(([label, time]) => btn('time', `${label}<small>${time || (Number.isFinite(minute) ? '翌日' : '—')}</small>`,
+    `data-key="${key}" data-time="${time}" ${time ? '' : 'disabled'}`)).join('') +
+    btn('now', '現在時刻', `data-key="${key}"`);
+}
+function timeInput(draft, key, label) {
+  return field('draft', key, label, draft[key], 'type="time"') +
+    `<div class="time-grid" data-time-for="${key}">${timeChoices(key,draft[key])}</div>`;
+}
+function refreshTimeChoices(key) {
+  const grid = main.querySelector(`[data-time-for="${key}"]`);
+  if (grid) grid.innerHTML = timeChoices(key,data.draft[key]);
 }
 function workView() {
   const d = data.draft;
@@ -99,9 +104,9 @@ function workView() {
       ${last ? `<section class="card"><h2>最後の作業</h2>
         <p>${dayLabel(last.day)}</p><p class="break">${esc(last.machine)} · ${esc(last.site)}</p>
         <p>終了アワー　${(H.meter(last.parts.at(-1).last)/10).toFixed(1)}</p>
-        <div class="row">${btn('resume','この作業の続きから',idAttr(last.id),'primary')}
+        <div class="row">${btn('resume','作業の続きから',idAttr(last.id),'primary')}
         ${last.day !== today ? btn('resume-today','今日の作業として引き継ぐ',idAttr(last.id)) : ''}</div>
-        ${last.day !== today ? '<p class="muted">「この作業の続きから」は表示の日付の日誌に追加します。</p>' : ''}
+        ${last.day !== today ? '<p class="muted">「作業の続きから」は表示の日付の日誌に追加します。</p>' : ''}
       </section>` : ''}`;
   }
   const match = H.findJournal(data.journals, d);
@@ -129,9 +134,9 @@ function workView() {
   <label class="check"><input type="checkbox" data-target="draft" name="tsurui" ${(match?.tsurui ?? d.tsurui) ? 'checked' : ''} ${match ? 'disabled' : ''}>鶴居加算</label>
   <p id="match" class="muted">${match && !d.partId ? '同じ日・機械・作業先の日誌に追加します。' : ''}</p></section>`}
   <section class="card"><h2>開始</h2>${timeInput(d,'start','開始時刻')}
-  ${field('draft','first','開始アワメーター',d.first,'inputmode="decimal" placeholder="4756.6"')}</section>
+  ${field('draft','first','開始アワメーター',d.first,'inputmode="decimal"')}</section>
   ${d.finished ? `<section class="card"><h2>終了</h2>${timeInput(d,'end','終了時刻')}
-  ${field('draft','last','終了アワメーター',d.last,'inputmode="decimal" placeholder="4758.6"')}
+  ${field('draft','last','終了アワメーター',d.last,'inputmode="decimal"')}
   <p id="preview" class="muted"></p></section>` : ''}
   ${working ? '' : btn(d.finished ? 'save' : 'begin', d.finished ? '保存' : '開始', '', 'primary wide')}
   ${btn('discard','入力を破棄','','danger spaced')}`;
@@ -200,7 +205,7 @@ function detailView() {
     <section class="card"><h2>料金計算</h2>${feeLine('機械使用料',t.machineRate,t.tenths,10,t.machineFee)}
     ${feeLine('オペレーター料',journal.rates.operator,t.mins,60,t.operatorFee)}
     <div class="between total"><strong>合計金額</strong><span class="number">${yen(t.total)}</span></div></section>
-    ${btn('resume','この作業の続きから',idAttr(journal.id),'primary wide')}
+    ${btn('resume','作業の続きから',idAttr(journal.id),'primary wide')}
     <details class="card spaced"><summary>日誌・作業を編集</summary>
     <form data-form="journal" data-id="${esc(journal.id)}">
     ${field('editor','day','作業日',journal.day,'type="date" required')}
@@ -430,9 +435,11 @@ document.addEventListener('click', async event => {
       main.querySelector('[name=end]').closest('section').scrollIntoView({block:'start'});
       if (d.day !== now.day) notice('作業日と取得日の違いを確認し、作業日当日の終了時刻を入力してください。');
     }
-    if (action === 'time' && time) {
-      change(next => { next.draft[key] = time; });
-      main.querySelector(`[name="${key}"]`).value = time;
+    if ((action === 'time' && time) || action === 'now') {
+      const value = action === 'now' ? H.clock().time : time;
+      change(next => { next.draft[key] = value; });
+      main.querySelector(`[name="${key}"]`).value = value;
+      refreshTimeChoices(key);
       refreshDraftHints();
     }
     if (action === 'save' && data.draft?.finished) saveDraft();
@@ -467,6 +474,7 @@ main.addEventListener('input', event => {
   if (input.dataset.target !== 'draft') return;
   try {
     change(next=>{ next.draft[input.name] = input.type === 'checkbox' ? input.checked : input.value; });
+    if (input.name === 'start' || input.name === 'end') refreshTimeChoices(input.name);
     refreshDraftHints();
   } catch (error) { notice(error.message); }
 });
